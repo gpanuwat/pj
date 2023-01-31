@@ -1,0 +1,131 @@
+# -*- coding: utf-8 -*-
+import arcpy,os, codecs
+arcpy.env.overwriteOutput = True
+
+projectfile = r"C:\Contents\Projects\NACC\NACC.aprx"
+parcelfld = 'โฉน' #'parno' # ฟิลด์  parno นั้น ประเภทฟิลด์ต้องเป็น text
+foldername = 'ProjectA'
+output =  r"C:\Contents\Projects\NACC\output"
+lucode_symbol = r"C:\Contents\Projects\NACC\LUsymbol_Code.lyrx"
+luyellow_symbol = r"C:\Contents\Projects\NACC\LUsymbol.lyrx"
+
+# projectfile = arcpy.GetParameterAsText(0) #r"C:\Contents\Projects\NACC\NACC.aprx"
+# parcelfc = arcpy.GetParameterAsText(1)
+# parcelfld = arcpy.GetParameterAsText(2) #'โฉน' #'parno' # ฟิลด์  parno นั้น ประเภทฟิลด์ต้องเป็น text
+# #scale = arcpy.GetParameterAsText(3)
+# foldername = arcpy.GetParameterAsText(3)
+# output = arcpy.GetParameterAsText(4) #r"C:\Contents\Projects\NACC\output"
+
+
+
+outputfolder = arcpy.CreateFolder_management(output,foldername)
+file = codecs.open(output + "/detail.txt", "w", "utf-8")
+
+aprx = arcpy.mp.ArcGISProject(projectfile)
+print(aprx.filePath)
+mp = aprx.listMaps()[0]
+parcellyr = mp.listLayers()[0]
+zoomlyr = mp.listLayers()[1]
+zoomlyr = mp.addLayer(parcellyr,"TOP")
+zoomlyr = mp.listLayers()[0]
+zoomlyr.visible = False
+
+fc = parcellyr.dataSource
+#วนทำงานกับแต่ละแปลงที่ดินใน fc
+cursor = arcpy.da.SearchCursor(fc,[parcelfld, 'Shape@'])
+for row in cursor:
+    print("\n")
+    print(row[0])
+    file.writelines("\n######### หมายเลขเอกสารสิทธิ {} #########\n".format(row[0]))
+    a = 3.6666
+    print(float(int(a)))
+
+    rai = int(row[1].area / 1600)
+    ngan = int((row[1].area/1600 - float(int(row[1].area/1600)))*1600 /400)
+    sqwa = round(row[1].area % 1600 % 400 % 100, 2)
+    print("เนื้อที่ {} ไร่ {} งาน {:.2f} ตร.วา\n".format(rai, ngan, sqwa))
+    print(row[1].area)
+    file.writelines("เนื้อที่ {:.2f} ตร.ม.\n".format(row[1].area))
+    file.writelines("เนื้อที่ {} ไร่ {} งาน {:.2f} ตร.วา\n".format(rai, ngan, sqwa))
+    file.writelines("-------------------------------------------\n")
+
+    wherezoom = parcelfld + "= '" + row[0] + "'"
+    #print(wherezoom)
+    arcpy.SelectLayerByAttribute_management(zoomlyr,"NEW_SELECTION",wherezoom)
+    df= [{'name': 'Appended Query', 'sql': wherezoom, 'isActive': True}]
+    #print(df)
+    parcellyr.updateDefinitionQueries(df)
+    lyt = aprx.listLayouts()[0] # layout แรกใน project file
+    mf = lyt.listElements('MAPFRAME_ELEMENT','*')[0]
+    mf.camera.setExtent(mf.getLayerExtent(zoomlyr,True,True))
+    mf.zoomToAllLayers()
+    #percentscale = float(1 + (float(scale) / 1000))
+    mf.camera.scale *= 0.15
+    mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+
+    parcelfolder = arcpy.CreateFolder_management(outputfolder, "folder_" + row[0])
+
+    for lu in mp.listLayers('LU*'):
+        print(lu)
+        file.writelines("การใช้ประโยชน์ที่ดิน ปี {}\n".format(lu.name[2:]))
+        shpfolder = arcpy.CreateFolder_management(parcelfolder, "shp_" + row[0])
+        luclip = "{}/clip_{}.shp".format(shpfolder,lu.name)
+        arcpy.Clip_analysis(lu,zoomlyr,luclip)
+        ludis = "{}/dis_{}.shp".format(shpfolder, lu.name)
+        arcpy.Dissolve_management(luclip, ludis, 'Code_LU', "Detail FIRST")
+        lucursor = arcpy.da.SearchCursor(ludis, ['Code_LU', 'FIRST_Deta', 'Shape@'])  # ['Shape@'])
+        sum = 0.00
+        for lurow in lucursor:
+            percentarea = lurow[2].area / row[1].area * 100
+            sum = percentarea + sum
+            print("{} {} ร้อยละ {:.2f}".format(lurow[0], lurow[1], percentarea))
+            file.writelines("{} {} ร้อยละ {:.2f}\n".format(lurow[0], lurow[1], percentarea))
+        print("ผลรวม {:.3f}".format(sum))
+
+        file.writelines("ผลรวม {:.3f}\n".format(sum))
+        file.writelines("-------------------------------------------\n")
+        lucode = mp.addDataFromPath(luclip)
+        symbologyLayer = lucode_symbol #r"C:\Contents\Projects\NACC\LUsymbol_Code.lyrx"
+        symbologyFields = "VALUE_FIELD Code_LU Code_LU"
+        arcpy.ApplySymbologyFromLayer_management(lucode, symbologyLayer, symbologyFields)
+        lyt.exportToJPEG("{}/{}_{}.jpg".format(parcelfolder,row[0],lu), 300)
+        lucode.visible = False
+
+        luc = mp.addDataFromPath(luclip)
+        symbologyLayer = luyellow_symbol #"C:\Contents\Projects\NACC\LUsymbol.lyrx"
+        symbologyFields = []
+        arcpy.ApplySymbologyFromLayer_management(luc, symbologyLayer, symbologyFields)
+        pl = mp.addLayer(parcellyr, "TOP")[0]
+
+        for img in mp.listLayers('RS'+lu.name[2:]):
+            print(img)
+            img.visible = True
+
+        lyt.exportToJPEG("{}/{}_{}_RS{}.jpg".format(parcelfolder,row[0],lu,lu.name[2:]), 300)
+        luc.visible = False
+        img.visible = False
+        pl.visible = False
+
+
+file.writelines(u'\ufeff')
+file.close()
+
+    # if row[1].area < 2500:
+    #     mf.camera.scale *=2
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+    # elif row[1].area < 5000:
+    #     mf.camera.scale *= 1.5
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+    # elif row[1].area < 10000:
+    #     mf.camera.scale *= 1.25
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+    # else:
+    #     mf.camera.scale *= 1.15
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+
+
+    #os.mkdir(outputfolder + "/folder_" + row[0])
+    #outputpath = parcelfolder + "/folder_" + row[0] + "/" + row[0] + "layout.jpg"
+    # print(outputpath)
+    #
+    # lyt.exportToJPEG(outputpath, 300)
