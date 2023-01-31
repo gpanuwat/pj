@@ -42,7 +42,8 @@ for row in cursor:
     #     mf.camera.scale *= 1.15
     #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
 
-    os.mkdir(outputfolder + "/folder_" + row[0])
+    arcpy.CreateFolder_management(outputfolder + "/folder_" + row[0])
+    #os.mkdir(outputfolder + "/folder_" + row[0])
     outputpath = outputfolder + "/folder_" + row[0] + "/" + row[0] + "layout.jpg"
     print(outputpath)
 
