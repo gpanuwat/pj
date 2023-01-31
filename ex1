@@ -1,0 +1,50 @@
+import arcpy,os
+
+
+projectfile = r"C:\Contents\Projects\NACC\NACC.aprx"
+parcelfld = 'โฉน' #'parno' # ฟิลด์  parno นั้น ประเภทฟิลด์ต้องเป็น text
+outputfolder = r"C:\Contents\Projects\NACC\output"
+
+aprx = arcpy.mp.ArcGISProject(projectfile)
+print(aprx.filePath)
+mp = aprx.listMaps()[0]
+parcellyr = mp.listLayers()[0]
+zoomlyr = mp.listLayers()[1]
+fc = parcellyr.dataSource
+#วนทำงานกับแต่ละแปลงที่ดินใน fc
+cursor = arcpy.da.SearchCursor(fc,[parcelfld, 'Shape@'])
+for row in cursor:
+    print(row[0])
+    print(row[1].area)
+    wherezoom = parcelfld + "= '" + row[0] + "'"
+    print(wherezoom)
+    arcpy.SelectLayerByAttribute_management(zoomlyr,"NEW_SELECTION",wherezoom)
+    df= [{'name': 'Appended Query', 'sql': wherezoom, 'isActive': True}]
+    #print(df)
+    parcellyr.updateDefinitionQueries(df)
+    lyt = aprx.listLayouts()[0] # layout แรกใน project file
+    mf = lyt.listElements('MAPFRAME_ELEMENT','*')[0]
+    mf.camera.setExtent(mf.getLayerExtent(zoomlyr,True,True))
+    mf.zoomToAllLayers()
+    mf.camera.scale *= 1.15
+    mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+
+    # if row[1].area < 2500:
+    #     mf.camera.scale *=2
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+    # elif row[1].area < 5000:
+    #     mf.camera.scale *= 1.5
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+    # elif row[1].area < 10000:
+    #     mf.camera.scale *= 1.25
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+    # else:
+    #     mf.camera.scale *= 1.15
+    #     mf.camera.scale = round((mf.camera.scale + 10) / 100) * 100
+
+    os.mkdir(outputfolder + "/folder_" + row[0])
+    outputpath = outputfolder + "/folder_" + row[0] + "/" + row[0] + "layout.jpg"
+    print(outputpath)
+
+    lyt.exportToJPEG(outputpath, 300)
+
