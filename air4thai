@@ -53,6 +53,7 @@ arcpy.StageService_server(sddraft_output_filename, sd_output_filename)
 
 # Share to portal
 print("Uploading Service Definition...")
-arcpy.UploadServiceDefinition_server(sd_output_filename, "My Hosted Services")
+#arcpy.server.UploadServiceDefinition(in_sd_file, in_server, {in_service_name}, {in_cluster}, {in_folder_type}, {in_folder}, {in_startupType}, {in_override}, {in_my_contents}, {in_public}, {in_organization}, {in_groups})
+arcpy.UploadServiceDefinition_server(sd_output_filename, "My Hosted Services",None,None,None,None,None,None,None,True)
 
 print("Successfully published service.")
