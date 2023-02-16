@@ -1,1 +1,58 @@
-import arcpy
+# -*- coding: utf-8 -*-
+# coding: utf8
+import json, arcpy,os
+# import urllib library
+from urllib.request import urlopen
+from datetime import timedelta
+from datetime import datetime
+arcpy.env.overwriteOutput = "true"
+
+# external variable
+json = 'http://164.115.44.141/test/air4thai2gis.json'
+data = 'air4thai1'
+outdir = r'C:\Contents\Projects\IEAT\2021'
+aprxfilename = r"C:\Contents\Projects\IEAT\2021\Publish_Monitor\Monitor_station.aprx"
+aprx = arcpy.mp.ArcGISProject(aprxfilename)
+m = aprx.listMaps("Map1")[0]
+service = data
+
+
+arcpy.CreateFileGDB_management(outdir,data)
+air4thai_point = arcpy.JSONToFeatures_conversion(json, outdir+"\\" + data + ".gdb\\" + data +"_point")
+print(arcpy.GetCount_management(air4thai_point))
+
+
+# Step 3 Publish aprx to Feature service
+# Sign in to portal
+arcpy.SignInToPortal('https://www.arcgis.com','warroom1', 'ieat@1234*')
+
+# Set output file names
+
+sddraft_filename = service + ".sddraft"
+sddraft_output_filename = os.path.join(outdir, sddraft_filename)
+
+# Reference map to publish
+
+
+# Create FeatureSharingDraft and set service properties
+sharing_draft = m.getWebLayerSharingDraft("HOSTING_SERVER", "FEATURE", service)
+sharing_draft.summary = "The service published by python script "
+sharing_draft.tags = "My Tags"
+sharing_draft.description = "My Description"
+sharing_draft.credits = "Credits from IEAT"
+sharing_draft.useLimitations = "My Use Limitations"
+sharing_draft.overwriteExistingService = "true"
+
+# Create Service Definition Draft file
+sharing_draft.exportToSDDraft(sddraft_output_filename)
+
+# Stage Service
+sd_filename = service + ".sd"
+sd_output_filename = os.path.join(outdir, sd_filename)
+arcpy.StageService_server(sddraft_output_filename, sd_output_filename)
+
+# Share to portal
+print("Uploading Service Definition...")
+arcpy.UploadServiceDefinition_server(sd_output_filename, "My Hosted Services")
+
+print("Successfully published service.")
