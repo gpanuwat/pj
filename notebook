@@ -1,0 +1,11 @@
+from arcgis.gis import GIS
+gis = GIS("home")
+
+csv_file = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.csv'
+csv_item = gis.content.add({}, csv_file)
+
+display(csv_item)
+
+# Create new service on first time
+csv_lyr = csv_item.publish(None, {"Address":"LOCATION"})
+display(csv_lyr)
